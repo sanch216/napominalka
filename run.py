@@ -5,7 +5,9 @@ from aiogram.client.default import DefaultBotProperties
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import asyncio
 
-TOKEN = "8310964312:AAGpill9JMTTIyfkzF9bkb08uqe7NtgAghU"
+import os
+TOKEN = os.getenv("BOT_TOKEN")
+
 
 bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
