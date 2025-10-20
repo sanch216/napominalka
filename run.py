@@ -1,24 +1,24 @@
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.enums import ParseMode
-from aiogram.client.default import DefaultBotProperties
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 import asyncio
-
 import os
+from aiohttp import web
+
+# ====== Токен через Environment Variable ======
 TOKEN = os.getenv("BOT_TOKEN")
-
-
-bot = Bot(token=TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+bot = Bot(token=TOKEN, parse_mode=ParseMode.HTML)
 dp = Dispatcher()
 scheduler = AsyncIOScheduler()
 
 reminders = {}  # user_id -> interval (в часах)
 
+# ====== APScheduler wrapper ======
 def _schedule_send(user_id):
-    # wrapper called by APScheduler; it schedules the coroutine on the asyncio loop
     asyncio.create_task(send_reminder(user_id))
 
+# ====== Команды бота ======
 @dp.message(Command("start"))
 async def start(message: types.Message):
     await message.answer(
@@ -34,8 +34,6 @@ async def set_time(message: types.Message):
         interval = int(message.text.split()[1])
         user_id = message.from_user.id
         reminders[user_id] = interval
-
-        # schedule the synchronous wrapper which will create the async task
         scheduler.add_job(_schedule_send, "interval", hours=interval, args=[user_id], id=str(user_id), replace_existing=True)
         await message.answer(f"✅ Буду напоминать каждые {interval} ч.")
     except:
@@ -53,9 +51,26 @@ async def stop(message: types.Message):
 async def send_reminder(user_id):
     await bot.send_message(user_id, "⏰ Пора кодить, дружище!")
 
-async def main():
+# ====== Мини-веб-сервер для Render ======
+async def handle(request):
+    return web.Response(text="Bot is alive!")
+
+app = web.Application()
+app.router.add_get("/", handle)
+
+async def run_bot_and_server():
+    # Запускаем APScheduler
     scheduler.start()
+
+    # Запускаем aiohttp сервер
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.environ.get("PORT", 8000))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+
+    # Запускаем бота
     await dp.start_polling(bot)
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    asyncio.run(run_bot_and_server())
